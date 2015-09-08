@@ -1,3 +1,4 @@
+"use strict";
 //TODO: 
 // TODO: increase threshold - let it be set by a slider on screen or the x position of a touch.
 // TODO: debounce the shake detection so that it can't happen more than once per 0.5 second.
@@ -6,40 +7,228 @@
 // TODO: allow random scrambling of a group's pitch-phone assignments, so that people have to figure it out
 // TODO: allow rotate pitch-phone assignments so you're in the next group
 
-var threshold = 30;
+var threshold = 40;
 var accChangeX = 0; 
 var accChangeY = 0;
 var accChangeT = 0;
 
+var minTimeBetweenShakes;
 var timeSinceShake;
+var buttons;
+var myNoteInfo;
+var osc;
+var clickCount;
+
+var noteInfos;
+
+var colors = [
+  "#FF0000",
+  "#FF7F00",
+  "#FFFF00",
+  "#00FF00",
+  "#0000FF",
+  "#4B0082",
+  "#8F00FF",
+  "#FF0000"];
+
 function setup() {
+  //createCanvas(displayWidth, displayHeight);
+  createCanvas(windowWidth, windowHeight);
+  myNoteInfo = null;
   timeSinceShake = 0;
-  createCanvas(displayWidth, displayHeight);
+  minTimeBetweenShakes = 4;
+  makeNoteInfos();
+  makeButtons();
+  //console.log(JSON.stringify(buttons));
+  setupOsc();
+  clickCount = 0;
+  setShakeThreshold(30);
+}
+
+function setupOsc() {
+  osc = new p5.Oscillator();
+  osc.setType('square');
+  osc.amp(0);
+  osc.freq(440);
+  osc.start();
+}
+
+function rectCentered(x, y, w, h){
+  rect(x - w/2, y - h/2, w, h);
 }
 
 function draw() {
   background(0);
-  checkForShake();
+  //console.log(JSON.stringify(myNoteInfo));
+  fill(255);
+  textSize(32);
+  buttons.forEach(function(btn) { btn.drawButton() ; });
+  fill(myNoteInfo.color);
+  var rX = width-width/4;
+  var rY = height /2 ;
+  rectCentered(rX, rY, width/2, height);
+  fill(255);
+  stroke(0);
+  strokeWeight(4);
+  text(myNoteInfo.name, width-width/4, height/2);
+  text(clickCount, width-width/4, height/2 + 30);
+
+  //checkForShake();
   timeSinceShake ++;
- }
+}
+
+function touchStarted() {
+  var clickPos = { x: mouseX, y: mouseY};
+  delegatePressOrTouchToButtons(clickPos);
+  return false;
+}
+
 function mousePressed() {
-  actUponShake();
+  var clickPos = { x: mouseX, y: mouseY};
+  delegatePressOrTouchToButtons(clickPos);
+  return false;
+}
+
+function delegatePressOrTouchToButtons(clickPos) {
+  clickCount++ ;
+  //incNoteInfo();
+
+  buttons.forEach(function(btn, i) {
+    if(btn.shouldHandleTouch(clickPos)) {
+  //    myNoteInfo = btn.noteInfo;
+  //    btn.handleTouch();
+    }
+  });
+
+  playCurrentNote();
+}
+
+function freqs() { 
+  return [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25, 587.33, 659.25, 698.46, 783.99, 880.00, 987.77, 1046.50];
+}
+
+function freqForTone() {
+    return freqs()[i];
+}
+
+function within(v, mn, mx) {
+  return ((v >= mn) && (v <= mx));
+}
+
+function Button(x0, y0, x1, y1, btnText, btnColor, btnNoteInfo, btnClickFn) {
+  this.colr = btnColor;
+  var txt = btnText;
+  var clickFn = btnClickFn;
+  var pTL = { x: x0, y: y0 };
+  var pBR = { x: x1, y: y1 };
+  
+  this.noteInfo = btnNoteInfo;
+
+  this.toString = function () {
+    return JSON.stringify([pTL, pBR, txt, this.colr]);
+  };
+  this.shouldHandleTouch = function(pos) {
+    var inX = within(pos.x, pTL.x, pBR.x);
+    var inY = within(pos.y, pTL.y, pBR.y);
+    return ( inX && inY);
+  };
+  
+  var depth = function() {
+    return pBR.y - pTL.y;
+  };
+  var bWidth = function () {
+    return pBR.x - pTL.x;
+  };
+  this.drawButton = function (){
+    fill(this.colr);
+    rect(pTL.x, pTL.y, bWidth(), depth());
+    fill(0);
+    textAlign(CENTER);
+    text(txt, pTL.x + (pBR.x - pTL.x)/2, pTL.y + depth()/2+10); 
+  };
+
+  this.handleTouch = function() {
+    clickFn();
+  };
+}
+function incNoteInfo() {
+  var i = myNoteInfo.scaleDegree-1;
+  if (i < noteInfos.length-1) {
+    myNoteInfo = noteInfos[i+1];
+  } else {
+    myNoteInfo = noteInfos[0];
+  }
+}
+
+function makeNoteInfos() {
+  var names = ["Do", "Re", "Mi", "Fa", "Sol", "La", "Ti"];
+  var pitchOffsets = [0, 2, 3, 5, 7, 9, 11];
+  
+  noteInfos = names.map(function(name, i) { 
+    return { name: name, 
+             pitchOffsetSemitones: pitchOffsets[i], 
+             scaleDegree: i+1, 
+             color: colors[i] };
+  });  
+}
+  
+function makeButtons() {
+  myNoteInfo = noteInfos[0];
+  
+  var h = height;
+  buttons = noteInfos.map(function(ni, i) {
+    var depth = h / noteInfos.length;
+    var y = i * depth;
+    return new Button(0, y, width/2, y+depth, ni.name, ni.color, ni, function() {
+      //console.log("my name is " + ni.name);
+    });
+  });
+
+  var strs = buttons.map(function (b) {
+    return b.toString();
+  });
+  //console.log(strs.join("\n"));
 }
 
 function playOsc(f, a) {
-  var osc = new p5.Oscillator();
+  //osc.setType('triangle');
+  //osc.setType('sawtooth');
   osc.setType('square');
-  osc.freq(f, 0.05);
-  var env = new p5.Env(0.01, a, 1);
+  osc.freq(f, 0.001);
+  var env = new p5.Env(0.02, a, 0.5);
   osc.amp(env);
-  osc.start();
-  env.play();
+  env.play();  
 }
+
+function playCurrentNote() {
+  var f = freqs()[myNoteInfo.scaleDegree-1];
+  playOsc(f, 0.6);
+}
+
 function actUponShake() {
+  if (timeSinceShake < minTimeBetweenShakes) {
+    return;
+  }
   timeSinceShake = 0;
-  playOsc(440, 0.3);
-  console.log("shaken: " + accChangeX);
+
+  incNoteInfo();
+  playCurrentNote();
+  //console.log("shaken: " + accChangeX + " and note info: " + JSON.stringify(myNoteInfo));
 }
+function keyPressed() {
+  console.log("key pressed" + key);
+  if (key === 'N') {
+    incNoteInfo();
+    playCurrentNote();
+  }
+  if (key === ' ') {
+    actUponShake();
+  }
+}
+function deviceShaken() {
+    actUponShake();
+}
+
 function checkForShake() {
   // Calculate total change in accelerationX and accelerationY
   accChangeX = abs(accelerationX - pAccelerationX);
@@ -48,6 +237,5 @@ function checkForShake() {
   // If shake
   if (accChangeT >= threshold) {
     actUponShake();
-
   } 
 }

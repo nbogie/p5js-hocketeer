@@ -1,0 +1,20 @@
+{
+  // The plugin looks for a .jshintrc file in the same directory as the source
+  // file you're prettifying (or any directory above if it doesn't exist, or in
+  // your home folder if everything else fails) and uses those options along
+  // the default ones.
+
+  // Details: https://github.com/victorporof/Sublime-JSHint#using-your-own-jshintrc-options
+  // Example: https://github.com/jshint/jshint/blob/master/examples/.jshintrc
+  // Documentation: http://www.jshint.com/docs/options/
+  "browser": true,
+  "esnext": true,
+  "quotmark": false,
+  "globals": {},
+  "predef": ["p5", "push", "pop", "fill", "map", "min", "max", "constrain", "noStroke", "ellipse", "rect", "line", "stroke", "strokeWeight", "text", "round", "floor", "random", "color", "createCanvas", "windowWidth", "windowHeight", "touches", "mouseX", "mouseY", "touchX", "touchY", "accelerationX", "accelerationY", "pAccelerationX", "pAccelerationY", "Firebase", "console", "textAlign", "LEFT", "CENTER", "RIGHT", "height", "width", "noFill", "beginShape", "endShape", "vertex", "background", "millis", "keyCode", "key", "arc", "PI", "TWO_PI", "lerpColor", "dist", "mag", "sqrt", "cos", "sin", "atan2", "textAscent", "textWidth", "textSize", "unhex", "mouseButton", "setup", "draw", "mousePressed", "displayWidth", "displayHeight", "abs"],
+  "globalstrict": true,
+  "latedef": false, //set to true if you want to catch late def'd vars/fns
+  "strict": true,
+  "undef": true,
+  "unused": true
+}
