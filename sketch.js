@@ -6,20 +6,19 @@
 // TODO: allow joining a group on firebase and having your note assigned by that group admin.
 // TODO: allow random scrambling of a group's pitch-phone assignments, so that people have to figure it out
 // TODO: allow rotate pitch-phone assignments so you're in the next group
-
-var threshold = 40;
-var accChangeX = 0; 
-var accChangeY = 0;
-var accChangeT = 0;
+// TODO: allow user to set shake sensitivity and time between shakes
 
 var minTimeBetweenShakes;
 var timeSinceShake;
+var octaveMult;
+
 var buttons;
 var myNoteInfo;
 var osc;
 var clickCount;
-
 var noteInfos;
+var touchStartPos;
+var msgs;
 
 var colors = [
   "#FF0000",
@@ -34,13 +33,15 @@ var colors = [
 function setup() {
   //createCanvas(displayWidth, displayHeight);
   createCanvas(windowWidth, windowHeight);
+  msgs = [];
   myNoteInfo = null;
   timeSinceShake = 0;
   minTimeBetweenShakes = 4;
   makeNoteInfos();
   makeButtons();
-  //console.log(JSON.stringify(buttons));
   setupOsc();
+  octaveMult = 1;
+  touchStartPos = null;
   clickCount = 0;
   setShakeThreshold(30);
 }
@@ -61,26 +62,34 @@ function draw() {
   background(0);
   //console.log(JSON.stringify(myNoteInfo));
   fill(255);
-  textSize(32);
+  textSize(56);
   buttons.forEach(function(btn) { btn.drawButton() ; });
   fill(myNoteInfo.color);
   var rX = width-width/4;
   var rY = height /2 ;
-  rectCentered(rX, rY, width/2, height);
+  rectCentered(rX, rY, width/2 - 1, height);
   fill(255);
   stroke(0);
-  strokeWeight(4);
+  noStroke();
+  textSize(96);
   text(myNoteInfo.name, width-width/4, height/2);
-  text(clickCount, width-width/4, height/2 + 30);
-
-  //checkForShake();
+  drawTexts([], 
+    width-width/4, height/2 - 100 );
+  drawFlashMessages();
   timeSinceShake ++;
+  cullFlashes();
 }
 
-function touchStarted() {
-  var clickPos = { x: mouseX, y: mouseY};
-  delegatePressOrTouchToButtons(clickPos);
-  return false;
+function drawTexts(texts, x, y) {
+  noStroke();
+  textSize(24);
+  texts.forEach(function (str, i) { 
+   text(str, x, y+ 30*i);
+  });
+}
+
+function drawFlashMessages() {
+  drawTexts(msgs.map(function(o) { return o.msg;  }), width/2, height/2 + 100);
 }
 
 function mousePressed() {
@@ -89,18 +98,53 @@ function mousePressed() {
   return false;
 }
 
+function touchStarted() {
+  var clickPos = { x: touchX, y: touchY};
+  touchStartPos = touches[0];
+  delegatePressOrTouchToButtons(clickPos);
+  return false;
+}
+function touchMoved() {
+}
+
+function touchEnded() {
+  var touchEndPos =  touches[0];
+  var dX = touchEndPos.x - touchStartPos.x;
+  var dY = touchEndPos.y - touchStartPos.y;
+  if (abs(dX) > abs(dY) && abs(dX) > 10){
+    if (dX > 0) {
+      incNoteInfo();
+    } else {
+      decNoteInfo();
+    }
+  } else if (abs(dY) > abs(dX) && abs(dY) > 10){
+    flash("vert swipe - change octave");
+    cycleOctave();
+  }
+  touchStartPos = null;
+}
+
 function delegatePressOrTouchToButtons(clickPos) {
   clickCount++ ;
   //incNoteInfo();
 
   buttons.forEach(function(btn, i) {
     if(btn.shouldHandleTouch(clickPos)) {
-  //    myNoteInfo = btn.noteInfo;
-  //    btn.handleTouch();
+      myNoteInfo = btn.noteInfo;
+      btn.handleTouch();
     }
   });
 
   playCurrentNote();
+}
+
+
+function flash(msg) {
+  msgs.push({ msg: msg, until: millis() + 1000 });
+}
+
+function cullFlashes() {
+  msgs = msgs.filter(function(o) { return o.until > millis(); });
 }
 
 function freqs() { 
@@ -140,9 +184,12 @@ function Button(x0, y0, x1, y1, btnText, btnColor, btnNoteInfo, btnClickFn) {
     return pBR.x - pTL.x;
   };
   this.drawButton = function (){
+    strokeWeight(1);
+    stroke(255);
     fill(this.colr);
     rect(pTL.x, pTL.y, bWidth(), depth());
-    fill(0);
+    noStroke();
+    fill(255);
     textAlign(CENTER);
     text(txt, pTL.x + (pBR.x - pTL.x)/2, pTL.y + depth()/2+10); 
   };
@@ -151,6 +198,7 @@ function Button(x0, y0, x1, y1, btnText, btnColor, btnNoteInfo, btnClickFn) {
     clickFn();
   };
 }
+
 function incNoteInfo() {
   var i = myNoteInfo.scaleDegree-1;
   if (i < noteInfos.length-1) {
@@ -158,11 +206,23 @@ function incNoteInfo() {
   } else {
     myNoteInfo = noteInfos[0];
   }
+  flash("next note (up)");
+}
+
+function decNoteInfo() {
+  var i = myNoteInfo.scaleDegree-1;
+  if (i > 0) {
+    myNoteInfo = noteInfos[i-1];
+  } else {
+    myNoteInfo = noteInfos[noteInfos.length -1];
+  }
+  flash("prev note (down)");
+
 }
 
 function makeNoteInfos() {
-  var names = ["Do", "Re", "Mi", "Fa", "Sol", "La", "Ti"];
-  var pitchOffsets = [0, 2, 3, 5, 7, 9, 11];
+  var names = ["Do", "Re", "Mi", "Fa", "Sol", "La", "Ti", "Do"];
+  var pitchOffsets = [0, 2, 3, 5, 7, 9, 11, 12];
   
   noteInfos = names.map(function(name, i) { 
     return { name: name, 
@@ -200,9 +260,10 @@ function playOsc(f, a) {
   env.play();  
 }
 
+
 function playCurrentNote() {
   var f = freqs()[myNoteInfo.scaleDegree-1];
-  playOsc(f, 0.6);
+  playOsc(octaveMult * f, 0.6);
 }
 
 function actUponShake() {
@@ -211,14 +272,31 @@ function actUponShake() {
   }
   timeSinceShake = 0;
 
-  incNoteInfo();
   playCurrentNote();
-  //console.log("shaken: " + accChangeX + " and note info: " + JSON.stringify(myNoteInfo));
 }
-function keyPressed() {
+function cycleOctave() {
+  var maxOctaveMult = 2;
+  octaveMult += 1;
+  if (octaveMult > maxOctaveMult) {
+    octaveMult = 1;
+  }
+}
+function member(str, sought) {
+  return (str.split("").indexOf(sought) >= 0);
+}
+function keyTyped() {
   console.log("key pressed" + key);
-  if (key === 'N') {
+  if (key === "N" || key === ">" || key === ".") {
     incNoteInfo();
+    playCurrentNote();
+  }
+  if (key === "<" || key === ",") {
+    decNoteInfo();
+    playCurrentNote();
+  }
+
+  if (key === 'O') {
+    cycleOctave();
     playCurrentNote();
   }
   if (key === ' ') {
@@ -227,15 +305,4 @@ function keyPressed() {
 }
 function deviceShaken() {
     actUponShake();
-}
-
-function checkForShake() {
-  // Calculate total change in accelerationX and accelerationY
-  accChangeX = abs(accelerationX - pAccelerationX);
-  accChangeY = abs(accelerationY - pAccelerationY);
-  accChangeT = accChangeX + accChangeY;
-  // If shake
-  if (accChangeT >= threshold) {
-    actUponShake();
-  } 
 }
