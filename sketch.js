@@ -7,7 +7,7 @@
 // TODO: allow random scrambling of a group's pitch-phone assignments, so that people have to figure it out
 // TODO: allow rotate pitch-phone assignments so you're in the next group
 // TODO: allow user to set shake sensitivity and time between shakes
-
+// TODO: don't be redrawing all the time!  Most of the time there should be nothing to do!
 var minTimeBetweenShakes;
 var timeSinceShake;
 var octaveMult;
@@ -15,6 +15,8 @@ var octaveMult;
 var buttons;
 var myNoteInfo;
 var osc;
+var env;
+
 var clickCount;
 var noteInfos;
 var touchStartPos;
@@ -52,6 +54,8 @@ function setupOsc() {
   osc.amp(0);
   osc.freq(440);
   osc.start();
+
+  env = new p5.Env(0.02, 0.4, 0.5);
 }
 
 function rectCentered(x, y, w, h){
@@ -253,10 +257,11 @@ function makeButtons() {
 function playOsc(f, a) {
   //osc.setType('triangle');
   //osc.setType('sawtooth');
+  
   osc.setType('square');
   osc.freq(f, 0.001);
-  var env = new p5.Env(0.02, a, 0.5);
   osc.amp(env);
+  env.set(0.02, 0.4, 0.5);
   env.play();  
 }
 
@@ -286,7 +291,7 @@ function member(str, sought) {
 }
 function keyTyped() {
   console.log("key pressed" + key);
-  if (key === "N" || key === ">" || key === ".") {
+  if (key === "n" || key === ">" || key === ".") {
     incNoteInfo();
     playCurrentNote();
   }
@@ -295,7 +300,7 @@ function keyTyped() {
     playCurrentNote();
   }
 
-  if (key === 'O') {
+  if (key === 'o') {
     cycleOctave();
     playCurrentNote();
   }
